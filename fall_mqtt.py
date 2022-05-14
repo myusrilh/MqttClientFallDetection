@@ -4,6 +4,7 @@ import requests
 import json
 
 client = mqtt.Client(protocol=mqtt.MQTTv311)
+key = "AIzaSyCIBBs236c9A0tyO6nTpbD6wWFamWIDyYA"
 
 def on_connect(client, userdata, flags, rc):    
     print("Result from connect: {}".format(mqtt.connack_string(rc)))    
