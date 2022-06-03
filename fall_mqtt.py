@@ -4,6 +4,7 @@ import numpy as np
 import requests
 import json
 import math
+import time, datetime
 from Kalman import KalmanAngle
 
 class FallMQTT():
@@ -17,6 +18,23 @@ class FallMQTT():
         self.roll = 0
         self.pitch = 0
         self.yaw = 0
+        self.gyr_sen = 0.07
+        # self.acc_sen = 1/64
+    
+    def calculate_complementary(self, accRoll, accPitch, gX, gY, gZ, dTime):
+        compConst = 1/(1+dTime)
+        roll = self.roll + ((gZ*dTime)*compConst) + (accRoll*(1-compConst))
+        pitch = self.pitch + ((gX*dTime)*compConst) + (accPitch*(1-compConst))
+        
+#             dataframe.loc[ind,"Yaw"] = dataframe.loc[ind,"Yaw"]+ (dataframe.loc[ind,"Gy"]*d_time)
+        yaw = self.yaw+ (gY*dTime)
+        if yaw < 0:
+            self.yaw = yaw+360.0
+        
+        self.roll = roll
+        self.pitch = pitch
+        
+        return True
     
     def calculate_Kalman(self, accRoll, accPitch, gX, gY, gZ, dTime):
         # compConst = 1/(1+dTime)
@@ -81,13 +99,17 @@ class FallMQTT():
         payload = eval(msg.payload)
         
         rad_to_deg = 180/np.pi
+        # d_time = 1/238
         
         c1 = np.sqrt(np.power(payload["Ax"],2) + np.power(payload["Az"],2))
         c2 = np.sqrt(np.power(payload["Ax"],2) + np.power(payload["Ay"],2) + np.power(payload["Az"],2))
         acc_roll = math.atan2(payload["Az"][0], payload["Ay"][0])*rad_to_deg
-        acc_pitch =  math.atan(-(payload["Ax"][0])/(np.sqrt(np.power(payload["Az"][0],2) + np.power(payload["Ay"][0],2))))*rad_to_deg
-        time = payload["d_time"][0]
-        if(self.calculate_Kalman(acc_roll,acc_pitch,payload["Gx"][0],payload["Gy"][0],payload["Gz"][0],payload["d_time"][0])):
+        acc_pitch =  math.atan2((payload["Ax"][0]),(np.sqrt(np.power(payload["Az"][0],2) + np.power(payload["Ay"][0],2))))*rad_to_deg
+        
+        dTime = payload["d_time"][0]
+        # if(self.calculate_Kalman(acc_roll,acc_pitch,payload["Gx"][0],payload["Gy"][0],payload["Gz"][0],payload["d_time"][0])):
+        
+        if(self.calculate_complementary(acc_roll,acc_pitch,payload["Gx"][0]/self.gyr_sen,payload["Gy"][0]/self.gyr_sen,payload["Gz"][0]/self.gyr_sen,payload["d_time"][0])):
             print("Roll, Pitch, Yaw fusioned!")
         else:
             print("Fusion failed!")
@@ -95,15 +117,28 @@ class FallMQTT():
         # payload = {"C1":[c1[0]],"C2":[c2[0]]}
         # print(acc_roll,acc_pitch)
         payload = {"C1":[c1[0]],"C2":[c2[0]],"Roll":[self.roll],"Pitch":[self.pitch],"Yaw":[self.yaw]}
-        print(payload)
-        post_data = {'dataset_ID': 1, 'time': json.dumps(time), 'payload': json.dumps(payload)}
-        print(post_data)
+        # print(payload)
+        post_data = {'dataset_ID': 1, 'time': json.dumps(dTime), 'payload': json.dumps(payload)}
+        # print(post_data)
+        
+        # dt_before_req_api = datetime.datetime.now().strftime("%A, %d %B %Y, %H:%M:%S.%f")
+        dt_before_req_api = time.strftime('%A, %d %B %Y %H:%M:%S')
         
         y_predict = requests.post('http://127.0.0.1:5000/falls', data=post_data)
+        
+        # dt_after_req_api = datetime.datetime.now().strftime("%A, %d %B %Y, %H:%M:%S.%f")
+        dt_after_req_api = time.strftime('%A, %d %B %Y %H:%M:%S')
+        
         # y_predict = requests.post('http://127.0.0.1:5000/falls', data=post_data).text
 
         # Make array from the list
         # y_predict = np.array(y_predict)
-        print(y_predict.json(), y_predict.status_code)
+        # client.publish('label/machine_learning', json.dumps({'prediction':y_predict.json()['prediction'],'seconds':y_predict.json()['seconds'],'datetime':y_predict.json()['datetime']}))
+        client.publish('label/machine_learning', json.dumps({'prediction':y_predict.json()['prediction'],'dt_after_pred':y_predict.json()['dt_after_pred'],'dt_before_pred':y_predict.json()['dt_before_pred']}))
         
-        client.publish('label/machine_learning', json.dumps({'prediction':y_predict.json()['prediction'],'time':y_predict.json()['time']}))
+        logFile = open('log-pred.txt','a') #a = append, rw = read/write, w = write
+        logFile.write("\n"+dt_before_req_api+", "+dt_after_req_api+", "+y_predict.json()['dt_before_pred']+", "+y_predict.json()['dt_after_pred']+", "+y_predict.json()['prediction']+", "+str(y_predict.status_code))
+        
+        print("\nResult: ",y_predict.json())
+        print("\tStatus code:",y_predict.status_code)
+        
