@@ -11,76 +11,24 @@ class FallMQTT():
 
     def __init__(self):
         
-        self.kalmanZ = KalmanAngle()
-        self.kalmanX = KalmanAngle()
-        self.kalAngleZ = 0
-        self.kalAngleX = 0
         self.roll = 0
         self.pitch = 0
         self.yaw = 0
-        self.gyr_sen = 0.07
+        # self.gyr_sen = gyr_sen
         # self.acc_sen = 1/64
     
     def calculate_complementary(self, accRoll, accPitch, gX, gY, gZ, dTime):
         compConst = 1/(1+dTime)
-        roll = self.roll + ((gZ*dTime)*compConst) + (accRoll*(1-compConst))
-        pitch = self.pitch + ((gX*dTime)*compConst) + (accPitch*(1-compConst))
+        self.roll = 0 + ((gZ*dTime)*compConst) + (accRoll*(1-compConst))
+        self.pitch = 0 + ((gX*dTime)*compConst) + (accPitch*(1-compConst))
         
 #             dataframe.loc[ind,"Yaw"] = dataframe.loc[ind,"Yaw"]+ (dataframe.loc[ind,"Gy"]*d_time)
-        yaw = self.yaw+ (gY*dTime)
-        if yaw < 0:
-            self.yaw = yaw+360.0
+        self.yaw = 0 + (gY*dTime)
+        if self.yaw < 0:
+            self.yaw = self.yaw + 360.0
         
-        self.roll = roll
-        self.pitch = pitch
-        
-        return True
-    
-    def calculate_Kalman(self, accRoll, accPitch, gX, gY, gZ, dTime):
-        # compConst = 1/(1+dTime)
-        
-        yaw = self.yaw +(gY*dTime)
-        if yaw < 0:
-            yaw = yaw+360.0
-            
-        self.kalmanZ.setAngle(accRoll)
-        self.kalmanX.setAngle(accPitch)
-        
-        gyroZAngle = accRoll
-        gyroXAngle = accPitch
-        # compAngleZ = accRoll
-        # compAngleX = accPitch   
-        
-        gyroZRate = gZ
-        gyroXRate = gX
-        
-        if((accRoll < -90 and self.kalAngleX >90) or (accRoll > 90 and self.kalAngleX < -90)):
-            self.kalmanZ.setAngle(accRoll)
-            # complAngleZ = accRoll
-            self.kalAngleX   = accRoll
-            gyroZAngle  = accRoll
-        else:
-            self.kalAngleZ = self.kalmanZ.getAngle(accRoll,gyroZRate,dTime)
-
-        if(abs(self.kalAngleZ)>90):
-            gyroXRate  = -gyroXRate
-            self.kalAngleX  = self.kalmanX.getAngle(accPitch,gyroXRate,dTime)
-        
-        gyroZAngle = gyroZRate * dTime
-        gyroXAngle = gyroXAngle * dTime
-
-        #compAngle = constant * (old_compAngle + angle_obtained_from_gyro) + (1-constant) * angle_obtained from accelerometer
-        # compAngleZ = compConst * (compAngleZ + gyroZRate * dTime) + (1-compConst) * accRoll
-        # compAngleX = compConst * (compAngleX + gyroXRate * dTime) + (1-compConst) * accPitch
-
-        if ((gyroZAngle < -180) or (gyroZAngle > 180)):
-            gyroZAngle = self.kalAngleZ
-        if ((gyroXAngle < -180) or (gyroXAngle > 180)):
-            gyroXAngle = self.kalAngleX
-        
-        self.roll = self.kalAngleZ
-        self.pitch = self.kalAngleX
-        self.yaw = yaw
+        # self.roll = roll
+        # self.pitch = pitch
         
         return True
 
@@ -108,9 +56,13 @@ class FallMQTT():
         
         dTime = payload["d_time"][0]
         # if(self.calculate_Kalman(acc_roll,acc_pitch,payload["Gx"][0],payload["Gy"][0],payload["Gz"][0],payload["d_time"][0])):
+        gX = payload["Gx"][0]
+        gY = payload["Gy"][0]
+        gZ = payload["Gz"][0]
         
-        if(self.calculate_complementary(acc_roll,acc_pitch,payload["Gx"][0]/self.gyr_sen,payload["Gy"][0]/self.gyr_sen,payload["Gz"][0]/self.gyr_sen,payload["d_time"][0])):
+        if(self.calculate_complementary(acc_roll,acc_pitch,gX,gY,gZ,dTime)):
             print("Roll, Pitch, Yaw fusioned!")
+            print("{\"Roll\":["+str(self.roll)+"],\"Pitch\":["+str(self.pitch)+"],\"Yaw\":["+str(self.yaw)+"]}")
         else:
             print("Fusion failed!")
         
@@ -136,8 +88,8 @@ class FallMQTT():
         # client.publish('label/machine_learning', json.dumps({'prediction':y_predict.json()['prediction'],'seconds':y_predict.json()['seconds'],'datetime':y_predict.json()['datetime']}))
         client.publish('label/machine_learning', json.dumps({'prediction':y_predict.json()['prediction'],'dt_after_pred':y_predict.json()['dt_after_pred'],'dt_before_pred':y_predict.json()['dt_before_pred']}))
         
-        logFile = open('log-pred.txt','a') #a = append, rw = read/write, w = write
-        logFile.write("\n"+dt_before_req_api+", "+dt_after_req_api+", "+y_predict.json()['dt_before_pred']+", "+y_predict.json()['dt_after_pred']+", "+y_predict.json()['prediction']+", "+str(y_predict.status_code))
+        # logFile = open('log-pred.txt','a') #a = append, rw = read/write, w = write
+        # logFile.write("\n"+dt_before_req_api+", "+dt_after_req_api+", "+y_predict.json()['dt_before_pred']+", "+y_predict.json()['dt_after_pred']+", "+y_predict.json()['prediction']+", "+str(y_predict.status_code))
         
         print("\nResult: ",y_predict.json())
         print("\tStatus code:",y_predict.status_code)

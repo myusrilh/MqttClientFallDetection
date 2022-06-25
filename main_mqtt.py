@@ -6,6 +6,7 @@ if __name__ == "__main__":
     # api_key = "AIzaSyCIBBs236c9A0tyO6nTpbD6wWFamWIDyYA"
     
     fall = FallMQTT()
+    
     client.on_connect = fall.on_connect    
     client.on_subscribe = fall.on_subscribe    
     client.on_message = fall.on_message    
