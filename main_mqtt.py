@@ -3,7 +3,6 @@ import paho.mqtt.client as mqtt
 
 if __name__ == "__main__":    
     client = mqtt.Client(protocol=mqtt.MQTTv311)
-    # api_key = "AIzaSyCIBBs236c9A0tyO6nTpbD6wWFamWIDyYA"
     
     fall = FallMQTT()
     

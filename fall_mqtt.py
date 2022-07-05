@@ -4,8 +4,10 @@ import numpy as np
 import requests
 import json
 import math
-import time, datetime
-from Kalman import KalmanAngle
+import time
+from datetime import datetime
+
+from sqlalchemy import null
 
 class FallMQTT():
 
@@ -18,7 +20,8 @@ class FallMQTT():
         # self.acc_sen = 1/64
     
     def calculate_complementary(self, accRoll, accPitch, gX, gY, gZ, dTime):
-        compConst = 1/(1+dTime)
+        const_time = 2
+        compConst = const_time/(const_time+dTime)
         self.roll = 0 + ((gZ*dTime)*compConst) + (accRoll*(1-compConst))
         self.pitch = 0 + ((gX*dTime)*compConst) + (accPitch*(1-compConst))
         
@@ -44,7 +47,10 @@ class FallMQTT():
         print("Message received. Topic: {}. Payload: {}".format(
             msg.topic, str(msg.payload)))
         
-        payload = eval(msg.payload)
+        if msg.payload is not null:
+            payload = eval(msg.payload)
+        else:
+            payload = {"Ax":[0.01],"Ay":[0.01],"Az":[0.01],"Gx":[0.1],"Gy":[0.1],"Gz":[0.1],"d_time":[0.1]}
         
         rad_to_deg = 180/np.pi
         # d_time = 1/238
@@ -66,20 +72,20 @@ class FallMQTT():
         else:
             print("Fusion failed!")
         
-        # payload = {"C1":[c1[0]],"C2":[c2[0]]}
-        # print(acc_roll,acc_pitch)
+        
         payload = {"C1":[c1[0]],"C2":[c2[0]],"Roll":[self.roll],"Pitch":[self.pitch],"Yaw":[self.yaw]}
+        # payload = {"Ax":[payload["Ax"][0]],"Ay":[payload["Ay"][0]],"Az":[payload["Az"][0]],"Gx":[gX],"Gy":[gY],"Gz":[gZ],"C1":[c1[0]],"C2":[c2[0]]}
         # print(payload)
         post_data = {'dataset_ID': 1, 'time': json.dumps(dTime), 'payload': json.dumps(payload)}
         # print(post_data)
         
-        # dt_before_req_api = datetime.datetime.now().strftime("%A, %d %B %Y, %H:%M:%S.%f")
-        dt_before_req_api = time.strftime('%A, %d %B %Y %H:%M:%S')
+        dt_before_req_api = datetime.utcnow().isoformat(sep=' ', timespec='milliseconds')
+        # dt_before_req_api = time.strftime('%A, %d %B %Y %H:%M:%S')
         
         y_predict = requests.post('http://127.0.0.1:5000/falls', data=post_data)
         
-        # dt_after_req_api = datetime.datetime.now().strftime("%A, %d %B %Y, %H:%M:%S.%f")
-        dt_after_req_api = time.strftime('%A, %d %B %Y %H:%M:%S')
+        dt_after_req_api = datetime.utcnow().isoformat(sep=' ', timespec='milliseconds')
+        # dt_after_req_api = time.strftime('%A, %d %B %Y %H:%M:%S')
         
         # y_predict = requests.post('http://127.0.0.1:5000/falls', data=post_data).text
 
